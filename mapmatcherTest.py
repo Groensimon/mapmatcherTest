@@ -76,7 +76,7 @@ def getSegmentCandidates(point, segments, maxdist=50): #changed from 10 to 50
             partnum += 1
             print part_list
         print partnum
-        candidates[row[0]] = p.angleAndDistanceTo(row[1], 'PLANAR')
+        candidates[row[0]] = p.distanceTo(row[1])
 
 
     #How to compute the distance:

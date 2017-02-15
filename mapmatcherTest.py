@@ -11,7 +11,10 @@
 # Licence:     <your licence>
 #-------------------------------------------------------------------------------
 from math import exp
-import shapefile
+#import shapefile
+import arcpy
+
+arcpy.env.workspace = 'C:/Users/simon/Documents/GitHub/mapmatcherTest'
 
 
 #To open the correct shapefiles
@@ -42,21 +45,52 @@ def getSegmentCandidates(point, segments, maxdist=50): #changed from 10 to 50
     #Returns closest segment candidates with probabilities. Based on maximal spatial distance of segments from point, returning a probability for each segment
     #This is where data needs to be inputted!!
     #test: calculates distances for points based on list index
-    myshp1 = open("c:/python27/learnpython/testTrack.shp", "rb")
-    print point
-    points = myshp1('Id')
-    myshp2 = open("c:/python27/learnpython/testSegments.shp", "rb")
-    segments = myshp2 ('OBJECTID')
+    arcpy.MakeFeatureLayer_management('testSegments.shp', 'segments_lyr')
+##    myshp1 = open("c:/python27/learnpython/testTrack.shp", "rb")
+##    print point
+##    points = myshp1('Id')
+##    myshp2 = open("c:/python27/learnpython/testSegments.shp", "rb")
+##    segments = myshp2 ('OBJECTID')
+    p = arcpy.PointGeometry(arcpy.Point(160704.663,  386336.415), arcpy.Describe('segments_lyr').spatialReference)
+    arcpy.SelectLayerByLocation_management ("segments_lyr", "WITHIN_A_DISTANCE", p, maxdist)
+
+    #arcpy.Select_analysis("segments_lyr", "output.shp", '')
     candidates = {}
-    for j in range(len(points)):
-        if points[j] == point:
-            #print j
-            for i in range(len(segments)):
-                #print i
-                diff = abs(j-i)
-                candidates[segments[i]] = getPDProbability(diff)
-            break
-    print candidates
+    for row in arcpy.da.SearchCursor('segments_lyr', ["OBJECTID", "SHAPE@"]):
+        print row[0]
+        #x, y = row[1]
+        #print x, y
+        partnum = 0
+        feat = row[1]
+    # Step through each part of the feature
+        for part in feat:
+            print "Part %i: " % partnum
+            part_list = []
+            for pnt in feat.getPart(partnum):
+                if pnt:
+                    # Add to list
+                    part_list.append([pnt.X, pnt.Y])
+                else:
+                    # If pnt is None, this represents an interior ring
+                    print "Interior Ring:"
+            partnum += 1
+            print part_list
+        print partnum
+        candidates[row[0]] = p.angleAndDistanceTo(row[1], 'PLANAR')
+
+
+    #How to compute the distance:
+    #newgeometry.distanceTo(geometry)
+##    candidates = {}
+##    for j in range(len(points)):
+##        if points[j] == point:
+##            #print j
+##            for i in range(len(segments)):
+##                #print i
+##                diff = abs(j-i)
+##                candidates[segments[i]] = getPDProbability(diff)
+##            break
+##    print candidates
     return candidates
 
 def getNDProbability(dist):
@@ -83,6 +117,7 @@ def getNetworkTransP(s1, s2, segments):
 
 
 
+
 #This is the actual method. It gets two lists of point and segment identifiers, and returns the most probable segment path for the list of points
 
 def mapMatch(points, segments):
@@ -101,55 +136,65 @@ def mapMatch(points, segments):
         lastsc = sc
         #Get segment candidates for current point t
         sc = getSegmentCandidates(points[t], segments)
-        for s in sc:
-            max_tr_prob = 0
-            prev_ss =None
-            for prev_s in lastsc:
-                 #determine the most probable transition probability from previous candidates to s
-                tr_prob = V[t-1][prev_s]["prob"]*getNetworkTransP(prev_s, s, segments)
-                if tr_prob > max_tr_prob:
-                    max_tr_prob = tr_prob
-                    prev_ss = prev_s
-            max_prob = max_tr_prob * sc[s]
-            V[t][s] = {"prob": max_prob, "prev": prev_ss}
+        #store segment candidates in an array (id)
+        print sc.keys()
+##        for s in sc:
+##            max_tr_prob = 0
+##            prev_ss =None
+##            for prev_s in lastsc:
+##                 #determine the most probable transition probability from previous candidates to s
+##                tr_prob = V[t-1][prev_s]["prob"]*getNetworkTransP(prev_s, s, segments)
+##                if tr_prob > max_tr_prob:
+##                    max_tr_prob = tr_prob
+##                    prev_ss = prev_s
+##            max_prob = max_tr_prob * sc[s]
+##            V[t][s] = {"prob": max_prob, "prev": prev_ss}
 
-    print V
-
-    # opt is the result: a list of (matched) segments [s1, s2, s3,...] in the exact order of the point track: [p1, p2, p3,...]
-    opt = []
-    # the output for Viterbi, but I also need an output that gives an influence for each GPS point and a cummulative result
-
-    # get the highest probability at the end of the track: the part below is only applicable when full on Viterbi is the way to go, otherwise leave it out -> 'if' statement
-    max_prob = max(value["prob"] for value in V[-1].values())
-    previous = None
-
-    # Get most probable state and its backtrack
-    for st, data in V[-1].items():
-        if data["prob"] == max_prob:
-            opt.append(st)
-            previous = st
-            break
-
-    # Follow the backtrack till the first observation
-    for t in range(len(V) - 2, -1, -1):
-        #print V[t + 1][previous]["prev"]
-        opt.insert(0, V[t + 1][previous]["prev"])
-        previous = V[t + 1][previous]["prev"]
-
-    print 'The path for points ['+' '.join(points)+'] is: [' + ' '.join(opt) + '] with highest probability of %s' % max_prob
-    return opt
+##    print V
+##
+##    # opt is the result: a list of (matched) segments [s1, s2, s3,...] in the exact order of the point track: [p1, p2, p3,...]
+##    opt = []
+##    # the output for Viterbi, but I also need an output that gives an influence for each GPS point and a cummulative result
+##
+##    # get the highest probability at the end of the track: the part below is only applicable when full on Viterbi is the way to go, otherwise leave it out -> 'if' statement
+##    max_prob = max(value["prob"] for value in V[-1].values())
+##    previous = None
+##
+##    # Get most probable state and its backtrack
+##    for st, data in V[-1].items():
+##        if data["prob"] == max_prob:
+##            opt.append(st)
+##            previous = st
+##            break
+##
+##    # Follow the backtrack till the first observation
+##    for t in range(len(V) - 2, -1, -1):
+##        #print V[t + 1][previous]["prev"]
+##        opt.insert(0, V[t + 1][previous]["prev"])
+##        previous = V[t + 1][previous]["prev"]
+##
+##    print 'The path for points ['+' '.join(points)+'] is: [' + ' '.join(opt) + '] with highest probability of %s' % max_prob
+##    return opt
     # backtracking can be used to get a cummulative influence
 
 
 
 #test
 
-points = open("c:/python27/learnpython/testSegments.shp", "rb") #changed from 'p1', 'p2' etc to a test track
-segments = [segmentsImport] #changed from 's1', 's2' etc to a test segments
+#points = open("c:/python27/learnpython/testSegments.shp", "rb") #changed from 'p1', 'p2' etc to a test track
+#segments = [segmentsImport] #changed from 's1', 's2' etc to a test segments
 #segments = list(reversed(segments))
 
-mapMatch(points, segments)
+#mapMatch(points, segments)
 
+#1) Get track file and turn into an array of geometries
+#Getting geometries from shapefiles:
+##for row in arcpy.da.SearchCursor('NBrabant', ["SHAPE@"]):
+##    Clip_feature =row[0]
+##    break
+#2) start masp matching with point array and segment path as inputs
+sc = getSegmentCandidates(None, None)
+print str(sc)
 
 
 
@@ -229,17 +274,17 @@ def dptable(V):
         yield "%.7s: " % state + " ".join("%.7s" % ("%f" % v[state]["prob"]) for v in V)
 
 #simple example:
-states = ('Healthy', 'Fever')
-observations = ('normal', 'cold', 'dizzy')
-start_probability = {'Healthy': 0.6, 'Fever': 0.4}
-transition_probability = {
-   'Healthy' : {'Healthy': 0.7, 'Fever': 0.3},
-   'Fever' : {'Healthy': 0.4, 'Fever': 0.6}
-   }
-
-emission_probability = {
-   'Healthy' : {'normal': 0.5, 'cold': 0.4, 'dizzy': 0.1},
-   'Fever' : {'normal': 0.1, 'cold': 0.3, 'dizzy': 0.6}
-   }
+##states = ('Healthy', 'Fever')
+##observations = ('normal', 'cold', 'dizzy')
+##start_probability = {'Healthy': 0.6, 'Fever': 0.4}
+##transition_probability = {
+##   'Healthy' : {'Healthy': 0.7, 'Fever': 0.3},
+##   'Fever' : {'Healthy': 0.4, 'Fever': 0.6}
+##   }
+##
+##emission_probability = {
+##   'Healthy' : {'normal': 0.5, 'cold': 0.4, 'dizzy': 0.1},
+##   'Fever' : {'normal': 0.1, 'cold': 0.3, 'dizzy': 0.6}
+##   }
 
 #viterbi(observations,states,start_probability,transition_probability,emission_probability)
